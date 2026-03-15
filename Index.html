@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USA State Quiz</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f4f7fb;
+      color: #1f2937;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: min(1100px, 96vw);
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+    }
+
+    .subtext {
+      color: #4b5563;
+      margin-top: 0;
+      margin-bottom: 18px;
+    }
+
+    .quiz-box {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+      padding: 20px;
+    }
+
+    .prompt {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .feedback {
+      min-height: 32px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .scoreboard {
+      font-size: 1rem;
+      color: #374151;
+      margin-bottom: 15px;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto 18px auto;
+    }
+
+    .state {
+      fill: #cbd5e1;
+      stroke: #ffffff;
+      stroke-width: 1;
+      cursor: pointer;
+      transition: fill 0.2s ease;
+    }
+
+    .state:hover {
+      fill: #93c5fd;
+    }
+
+    .correct {
+      fill: #34d399 !important;
+    }
+
+    .wrong {
+      fill: #f87171 !important;
+    }
+
+    .missed {
+      fill: #fbbf24 !important;
+    }
+
+    .completed {
+      fill: #86efac !important;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .secondary {
+      background: #6b7280;
+    }
+
+    .secondary:hover {
+      background: #4b5563;
+    }
+
+    .small-note {
+      margin-top: 14px;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>USA State Quiz</h1>
+    <p class="subtext">Click the correct state on the map.</p>
+
+    <div class="quiz-box">
+      <div class="prompt" id="prompt">Loading quiz...</div>
+      <div class="feedback" id="feedback"></div>
+      <div class="scoreboard" id="scoreboard">Score: 0 correct | 0 wrong | 0 remaining</div>
+
+      <svg id="map" viewBox="0 0 975 610" aria-label="Map of the United States"></svg>
+
+      <div class="controls">
+        <button id="nextBtn">Next State</button>
+        <button id="resetBtn" class="secondary">Restart Quiz</button>
+      </div>
+
+      <div class="small-note">
+        Libraries and map data used in this file:
+        https://cdn.jsdelivr.net/npm/d3@7 ,
+        https://cdn.jsdelivr.net/npm/topojson-client@3 ,
+        https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+  <script>
+    const svg = d3.select("#map");
+    const promptEl = document.getElementById("prompt");
+    const feedbackEl = document.getElementById("feedback");
+    const scoreboardEl = document.getElementById("scoreboard");
+    const nextBtn = document.getElementById("nextBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const width = 975;
+    const height = 610;
+
+    const stateNames = {
+      "01": "Alabama",
+      "02": "Alaska",
+      "04": "Arizona",
+      "05": "Arkansas",
+      "06": "California",
+      "08": "Colorado",
+      "09": "Connecticut",
+      "10": "Delaware",
+      "12": "Florida",
+      "13": "Georgia",
+      "15": "Hawaii",
+      "16": "Idaho",
+      "17": "Illinois",
+      "18": "Indiana",
+      "19": "Iowa",
+      "20": "Kansas",
+      "21": "Kentucky",
+      "22": "Louisiana",
+      "23": "Maine",
+      "24": "Maryland",
+      "25": "Massachusetts",
+      "26": "Michigan",
+      "27": "Minnesota",
+      "28": "Mississippi",
+      "29": "Missouri",
+      "30": "Montana",
+      "31": "Nebraska",
+      "32": "Nevada",
+      "33": "New Hampshire",
+      "34": "New Jersey",
+      "35": "New Mexico",
+      "36": "New York",
+      "37": "North Carolina",
+      "38": "North Dakota",
+      "39": "Ohio",
+      "40": "Oklahoma",
+      "41": "Oregon",
+      "42": "Pennsylvania",
+      "44": "Rhode Island",
+      "45": "South Carolina",
+      "46": "South Dakota",
+      "47": "Tennessee",
+      "48": "Texas",
+      "49": "Utah",
+      "50": "Vermont",
+      "51": "Virginia",
+      "53": "Washington",
+      "54": "West Virginia",
+      "55": "Wisconsin",
+      "56": "Wyoming"
+    };
+
+    let allStates = [];
+    let remainingStates = [];
+    let currentTarget = null;
+    let correctCount = 0;
+    let wrongCount = 0;
+    let mapReady = false;
+    let questionAnswered = false;
+
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function updateScoreboard() {
+      scoreboardEl.textContent =
+        `Score: ${correctCount} correct | ${wrongCount} wrong | ${remainingStates.length} remaining`;
+    }
+
+    function clearStateStyles() {
+      svg.selectAll(".state")
+        .classed("correct", false)
+        .classed("wrong", false)
+        .classed("missed", false);
+    }
+
+    function startNextQuestion() {
+      if (!mapReady) return;
+
+      clearStateStyles();
+      feedbackEl.textContent = "";
+
+      if (remainingStates.length === 0) {
+        currentTarget = null;
+        promptEl.textContent = "Quiz complete!";
+        feedbackEl.textContent = `Final score: ${correctCount} correct and ${wrongCount} wrong.`;
+        nextBtn.disabled = true;
+        return;
+      }
+
+      currentTarget = remainingStates[0];
+      questionAnswered = false;
+      promptEl.textContent = `Click on: ${currentTarget.name}`;
+      nextBtn.disabled = true;
+      updateScoreboard();
+    }
+
+    function markCompletedStates() {
+      const completedIds = new Set(allStates
+        .filter(s => !remainingStates.some(r => r.id === s.id))
+        .map(s => s.id)
+      );
+
+      svg.selectAll(".state")
+        .classed("completed", d => completedIds.has(String(d.id).padStart(2, "0")));
+    }
+
+    function handleStateClick(event, d) {
+      if (!currentTarget || questionAnswered) return;
+
+      const clickedId = String(d.id).padStart(2, "0");
+      const clickedName = stateNames[clickedId];
+
+      clearStateStyles();
+
+      if (clickedId === currentTarget.id) {
+        correctCount++;
+        feedbackEl.textContent = `Correct! That is ${clickedName}.`;
+        d3.select(this).classed("correct", true);
+
+        remainingStates = remainingStates.filter(state => state.id !== currentTarget.id);
+        questionAnswered = true;
+        nextBtn.disabled = false;
+        markCompletedStates();
+      } else {
+        wrongCount++;
+        feedbackEl.textContent = `Not quite. You clicked ${clickedName}. The correct answer was ${currentTarget.name}.`;
+        d3.select(this).classed("wrong", true);
+
+        svg.selectAll(".state")
+          .filter(s => String(s.id).padStart(2, "0") === currentTarget.id)
+          .classed("missed", true);
+
+        questionAnswered = true;
+        nextBtn.disabled = false;
+      }
+
+      updateScoreboard();
+    }
+
+    function resetQuiz() {
+      remainingStates = shuffle([...allStates]);
+      correctCount = 0;
+      wrongCount = 0;
+      currentTarget = null;
+      questionAnswered = false;
+      nextBtn.disabled = false;
+
+      svg.selectAll(".state")
+        .classed("correct", false)
+        .classed("wrong", false)
+        .classed("missed", false)
+        .classed("completed", false);
+
+      updateScoreboard();
+      startNextQuestion();
+    }
+
+    nextBtn.addEventListener("click", () => {
+      if (questionAnswered || !currentTarget) {
+        startNextQuestion();
+      }
+    });
+
+    resetBtn.addEventListener("click", resetQuiz);
+
+    d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json").then(us => {
+      const states = topojson.feature(us, us.objects.states).features
+        .filter(d => d.id !== "11");
+
+      allStates = states.map(d => {
+        const id = String(d.id).padStart(2, "0");
+        return {
+          id,
+          name: stateNames[id]
+        };
+      });
+
+      const nation = topojson.feature(us, us.objects.nation);
+
+      const projection = d3.geoAlbersUsa()
+        .fitSize([width, height], { type: "FeatureCollection", features: states });
+
+      const path = d3.geoPath(projection);
+
+      svg.append("path")
+        .datum(nation)
+        .attr("d", path)
+        .attr("fill", "#e5e7eb");
+
+      svg.append("g")
+        .selectAll("path")
+        .data(states)
+        .join("path")
+        .attr("class", "state")
+        .attr("d", path)
+        .on("click", handleStateClick);
+
+      svg.append("path")
+        .datum(topojson.mesh(us, us.objects.states, (a, b) => a !== b))
+        .attr("fill", "none")
+        .attr("stroke", "#ffffff")
+        .attr("stroke-linejoin", "round")
+        .attr("d", path);
+
+      mapReady = true;
+      resetQuiz();
+    }).catch(error => {
+      console.error(error);
+      promptEl.textContent = "Could not load the map.";
+      feedbackEl.textContent = "Please check your internet connection and try again.";
+    });
+  </script>
+</body>
+</html>
